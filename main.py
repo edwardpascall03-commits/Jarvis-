@@ -4,6 +4,7 @@ import json
 from dotenv import load_dotenv
 from tools.memory import save_session, load_last_session
 from tools.obsidian import read_note, write_note, append_to_today, read_today
+from tools.voice import listen_and_transcribe, speak
 
 load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -115,14 +116,42 @@ def chat(message):
     conversation_history.append({"role": "assistant", "content": reply})
     return reply
 
-print("Jarvis online. Type 'quit' to exit.\n")
+from tools.voice import listen_and_transcribe, speak
+
+voice_mode = False
+
+print("Jarvis online. Type 'quit' to exit, 'voice' to toggle voice mode.\n")
 
 while True:
-    user_input = input("You: ").strip()
+    if voice_mode:
+        user_input = listen_and_transcribe()
+        if user_input == "__TEXT_MODE__":
+            voice_mode = False
+            print("[Switched to text mode]")
+            continue
+        print(f"You said: {user_input}")
+        if not user_input:
+            print("[Nothing detected, try again]")
+            continue
+    else:
+        user_input = input("You: ").strip()
+
     if user_input.lower() in ["quit", "exit"]:
         save_session(conversation_history)
         print("Jarvis: Shutting down.")
         break
+
+    if user_input.lower() == "voice":
+        voice_mode = not voice_mode
+        status = "on" if voice_mode else "off"
+        print(f"[Voice mode {status}]")
+        continue
+
     if not user_input:
         continue
-    print(f"Jarvis: {chat(user_input)}\n")
+
+    reply = chat(user_input)
+    print(f"Jarvis: {reply}\n")
+
+    if voice_mode:
+        speak(reply)
