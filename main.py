@@ -2,6 +2,7 @@ import anthropic
 import os
 import json
 from dotenv import load_dotenv
+from tools.memory import save_session, load_last_session
 
 load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -32,6 +33,7 @@ print("Jarvis online. Type 'quit' to exit.\n")
 while True:
     user_input = input("You: ").strip()
     if user_input.lower() in ["quit", "exit"]:
+        save_session(conversation_history)
         print("Jarvis: Shutting down.")
         break
     if not user_input:

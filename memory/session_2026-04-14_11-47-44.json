@@ -1,0 +1,18 @@
+[
+  {
+    "role": "user",
+    "content": "hi how are you doing"
+  },
+  {
+    "role": "assistant",
+    "content": "Doing well, ready to help. What's going on with you?"
+  },
+  {
+    "role": "user",
+    "content": "just trying to code this memory section so we can record our convos"
+  },
+  {
+    "role": "assistant",
+    "content": "Nice \u2014 that's a core piece of Jarvis. What's your current approach, are you storing to a file, database, or something else? And are you trying to persist full conversation history or just summaries?"
+  }
+]
