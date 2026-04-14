@@ -1,0 +1,29 @@
+{
+  "name": "Edward",
+  "age": 22,
+  "background": "Second year CS student at University of Leicester. Autism and ADHD diagnosed. Systems thinker — understands things through structure and pattern, not memorisation.",
+  "focus_areas": [
+    "Cybersecurity and penetration testing",
+    "Building Jarvis AI assistant",
+    "CTF competitions — OverTheWire, HackTheBox, Pwn College",
+    "Muay Thai and BJJ — training 3 years"
+  ],
+  "learning_style": "Explicit over intuitive. Needs structure and reasoning before application. Comes alive on projects. Disengages from passive consumption.",
+  "communication_preferences": "Direct and honest. Concrete next actions over conceptual exploration. Call out intellectualising or over-planning. No excessive formatting.",
+  "current_priorities": [
+    "Finish university coursework without last-minute panic",
+    "Get Jarvis to Phase 2 and on GitHub",
+    "CTF sessions — OverTheWire Natas and HackTheBox"
+  ],
+  "tools": {
+    "os": "Ubuntu (desktop), Windows (if needed)",
+    "editor": "VS Code",
+    "ai_tools": ["Claude API", "Ollama (local models)", "Gemini API"]
+  },
+  "patterns_to_watch": [
+    "All-or-nothing thinking",
+    "Over-planning as avoidance",
+    "Intellectualising under stress",
+    "Maladaptive daydreaming without output"
+  ]
+}
