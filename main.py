@@ -5,15 +5,22 @@ from dotenv import load_dotenv
 from tools.memory import save_session, load_last_session
 from tools.obsidian import read_note, write_note, append_to_today, read_today
 from tools.voice import listen_and_transcribe, speak
+from tools.retrieval import store, retrieve, format_for_prompt
 
 load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-def load_profile():
+def load_profile(query: str = ""):
     with open("profile.json", "r") as f:
         profile = json.load(f)
-    return f"You are Jarvis, a personal AI assistant for {profile['name']}. Here is everything you need to know about them: {json.dumps(profile, indent=2)}"
-
+    base = f"You are Jarvis, a personal AI assistant for {profile['name']}. Here is everything you need to know about them: {json.dumps(profile, indent=2)}"
+    
+    if query:
+        memories = retrieve(query)
+        base += format_for_prompt(memories)
+    
+    return base
+    
 tools = [
     {
         "name": "append_to_today",
@@ -78,7 +85,7 @@ def chat(message):
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1000,
-        system=load_profile(),
+        system=load_profile(query=message), 
         tools=tools,
         messages=conversation_history
     )
@@ -114,6 +121,10 @@ def chat(message):
             reply += block.text
 
     conversation_history.append({"role": "assistant", "content": reply})
+    
+    # ← store the exchange after every reply
+    store(f"User: {message}\nJarvis: {reply}", metadata={"source": "conversation"})
+    
     return reply
 
 from tools.voice import listen_and_transcribe, speak
