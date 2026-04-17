@@ -4,3 +4,7 @@ venv/
 __pycache__/
 *.pyc
 memory/
+chroma_db/
+*.tmp
+*.md.tmp
+logs/
