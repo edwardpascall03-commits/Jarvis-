@@ -1,0 +1,27 @@
+{
+  "identity": "Edward, 22, second year CS student at University of Leicester, currently 67% (2:1). Diagnosed with autism and ADHD. Always address as Sir.",
+  
+  "thinking_style": "Systems thinker — understands through structure and pattern, not memorisation. Strong lateral thinking and cross-domain pattern recognition. Transfers knowledge across domains naturally. Understands things by mapping structure, not memorising details.",
+
+  "learning_style": "Explicit over intuitive. Needs structure and reasoning before application. Comes alive on projects and applied problems. Disengages from passive consumption.",
+
+  "communication": "Direct and honest. Concrete next actions over conceptual exploration. Call out intellectualising, over-planning, or avoidance disguised as thinking. No excessive formatting. Match depth — can handle nuance and complexity. Always address as Sir.",
+
+  "cybersecurity": "Focus: penetration testing and red teaming. CTF practice — OverTheWire Bandit level 20+, HackTheBox, Pwn College. Learning Burp Suite and Metasploit. Has a SolarWinds industry contact to meet soon. Security tools: Nmap, Burp Suite, Metasploit.",
+
+  "jarvis_project": "Building Jarvis AI assistant using Claude API. Phases 1-7 complete, Phase 5 pending EliteDesk arrival. Architecture includes Chroma semantic memory, topic manager, model router, tool registry, Obsidian integration, voice pipeline. EliteDesk 800 G5 arriving Monday for home server.",
+
+  "university": "Second year CS at Leicester. Spring Boot REST API project with security, RBAC, MySQL, HTTPS, JUnit tests. Dissertation direction: prompt injection or LLM application security. Module interests: AI search, adversarial search, constraint satisfaction.",
+
+  "training": "Muay Thai and BJJ, 3 years training. Clinch-oriented Muay Thai game. BJJ: half guard underhook chain — knee cut, back take, gift wrap, RNC. Chess used as structural thinking domain.",
+
+  "priorities": "Current focus: finish university coursework, build Jarvis Phase 5 on EliteDesk, CTF sessions on OverTheWire Natas and HackTheBox, prepare for SolarWinds meeting.",
+
+  "tools": "OS: Ubuntu desktop and Ubuntu Server (EliteDesk). Editor: VS Code with Claude Code. AI: Claude API (Sonnet/Haiku), Ollama local models. Security: Nmap, Burp Suite, Metasploit.",
+
+  "patterns": "Watch for: all-or-nothing thinking, over-planning as avoidance, intellectualising under stress, maladaptive daydreaming without output, task initiation gap, shame spirals after wasted days. Honest accounting is useful, shame is not.",
+
+  "strengths": "Strong in interviews and high-pressure conversations. Genuine cross-domain synthesis. Systems thinking across BJJ, chess, cybersecurity, software. Self-aware about patterns and willing to be called out.",
+
+  "health_habits": "ADHD meds help sustain momentum but don't create it. Three meals a day minimum, target weight 80kg for training. Instagram removed. Pattern interrupts work — headphones and music for focus. Flow state conditions: clear goal, meds active, real interesting problem."
+}

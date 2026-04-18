@@ -34,7 +34,17 @@ def classify(message: str) -> str:
 
 def haiku_chat(conversation_history: list, system_prompt: str, tools=None, handle_tool=None) -> str:
     try:
-        history = [m for m in conversation_history if isinstance(m["content"], str)]
+        history = []
+        for m in conversation_history:
+            if isinstance(m["content"], str) and m["content"].strip():
+                history.append(m)
+            elif isinstance(m["content"], list):
+                # Keep tool results, skip raw tool_use blocks
+                text_parts = [b for b in m["content"] 
+                             if isinstance(b, dict) and b.get("type") == "tool_result"]
+                if text_parts:
+                    history.append({"role": m["role"], "content": text_parts})
+
         if tools and handle_tool:
             reply, _, _ = run_with_tools(
                 client=_client,
@@ -46,6 +56,7 @@ def haiku_chat(conversation_history: list, system_prompt: str, tools=None, handl
                 max_tokens=500
             )
             return reply
+
         response = _client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=500,
