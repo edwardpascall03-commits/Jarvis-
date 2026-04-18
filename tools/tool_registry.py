@@ -68,7 +68,7 @@ def get_tools_for_message(message: str, n_results: int = 3) -> list:
         # Cosine distance threshold — only include tools that are actually relevant
         # Distance of 0 = identical, 1 = completely unrelated
         # Threshold of 0.6 means "reasonably relevant"
-        if distance < 0.45:
+        if distance < 0.6:
             tool_def = json.loads(meta["full_definition"])
             tools.append(tool_def)
             print(f"[Tool selected: {meta['name']} (distance: {distance:.2f})]")

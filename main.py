@@ -18,6 +18,7 @@ from tools.memory import save_session, load_last_session, get_daily_dir
 from tools.topic_manager import TopicManager
 from tools.tool_registry import register_tools, get_tools_for_message
 from tools.memory_curator import register_profile_chunks, get_relevant_chunks, format_profile_for_prompt, curate_context
+from tools.router import classify, haiku_chat, should_use_claude, detect_action
 
 load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -27,6 +28,8 @@ topic_manager = TopicManager(daily_dir=get_daily_dir())
 # Cost tracking
 total_input_tokens = 0
 total_output_tokens = 0
+total_haiku_input_tokens = 0
+total_haiku_output_tokens = 0
 SONNET_INPUT_COST = 3.00 / 1_000_000
 SONNET_OUTPUT_COST = 15.00 / 1_000_000
 HAIKU_INPUT_COST = 0.80 / 1_000_000
@@ -37,7 +40,7 @@ show_tokens = False
 tools = [
     {
         "name": "append_to_today",
-        "description": "Add a new log entry or note to today's daily Obsidian file. Use when the user wants to record, log, or track something that happened today.",
+        "description": "Append content to today's daily note. Use when the user says: 'append to today', 'log this', 'add to today', 'record that'.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -149,12 +152,12 @@ def load_profile(query: str = ""):
     # Curate — Haiku decides what actually gets injected
     curated = curate_context(query, profile_text, session_memories, long_term_memories)
 
-    return f"You are Jarvis, a personal AI assistant. Always address the user as Sir.\n\n{curated}"
+    return f"You are Jarvis, a personal AI assistant. Always address the user as Sir. You have tools to read and write files in the user's Obsidian vault — use them when asked, never claim you cannot access files.\n\n{curated}"
 
 conversation_history = []
 
 def chat(message):
-    global total_input_tokens, total_output_tokens
+    global total_input_tokens, total_output_tokens, total_haiku_input_tokens, total_haiku_output_tokens
 
     conversation_history.append({"role": "user", "content": message})
     topic_manager.process_message("user", message, message_for_detection=message)
@@ -163,21 +166,54 @@ def chat(message):
     # Session Chroma handles deeper context now
     capped_history = conversation_history[-4:] if len(conversation_history) > 4 else conversation_history
 
+    # Layer 1 — complexity classification
     category = classify(message)
     print(f"[Router: {category}]")
 
-    active_tools = get_tools_for_message(message, n_results=3)
+    # Layer 2 — action detection (free, keyword-based)
+    action = detect_action(message)
+    print(f"[Action: {action}]")
+
+    # Layer 3 — tool selection based on action type
+    if action == "READ":
+        # Reading never needs Sonnet — force Haiku, inject vault tools
+        active_tools = [t for t in tools if t["name"] in [
+            "search_vault", "read_vault_file", "read_note", "read_today", "list_vault"
+        ]]
+        force_haiku = True
+
+    elif action == "WRITE":
+        # Writing always needs write tools — complexity decides the model
+        active_tools = [t for t in tools if t["name"] in ["append_to_today", "write_note"]]
+        force_haiku = False
+
+    else:  # CHAT
+        # Ambiguous — use Chroma semantic selection, fallback for RETRIEVAL
+        active_tools = get_tools_for_message(message, n_results=3)
+        if not active_tools and category == "RETRIEVAL":
+            active_tools = [t for t in tools if t["name"] in ["search_vault", "read_vault_file", "read_note"]]
+            print(f"[Tool fallback: vault tools injected for RETRIEVAL]")
+        force_haiku = False
+
     system = load_profile(query=message)
 
-    # Simple/retrieval tasks go to Haiku
-    if not should_use_claude(category):
-        reply = haiku_chat(
+    # Route to Haiku or Sonnet
+    if force_haiku or not should_use_claude(category):
+        result = haiku_chat(
             capped_history,
             system,
             tools=active_tools if active_tools else [],
-            handle_tool=handle_tool if active_tools else None
+            handle_tool=handle_tool
         )
-        if reply:
+        if result:
+            reply, haiku_in, haiku_out = result
+            total_haiku_input_tokens += haiku_in
+            total_haiku_output_tokens += haiku_out
+
+            if show_tokens:
+                cost = haiku_in * HAIKU_INPUT_COST + haiku_out * HAIKU_OUTPUT_COST
+                print(f"[Haiku tokens — in: {haiku_in} out: {haiku_out} cost: £{cost:.5f}]")
+
             conversation_history.append({"role": "assistant", "content": reply})
             topic_manager.process_message("assistant", reply)
             exchange = f"User: {message}\nJarvis: {reply}"
@@ -188,7 +224,7 @@ def chat(message):
             return reply
         print("[Router: Haiku failed, falling back to Sonnet]")
 
-    # Complex/code tasks go to Sonnet
+    # Sonnet path — complex reasoning, code, or failed Haiku
     reply, in_tokens, out_tokens = run_with_tools(
         client=client,
         model="claude-sonnet-4-6",
@@ -207,14 +243,11 @@ def chat(message):
 
     conversation_history.append({"role": "assistant", "content": reply})
     topic_manager.process_message("assistant", reply)
-
     exchange = f"User: {message}\nJarvis: {reply}"
     store_session(exchange, metadata={"source": "conversation"})
     store(exchange, metadata={"source": "conversation"})
-
     if len(conversation_history) % 10 == 0:
         save_session(conversation_history)
-
     return reply
 
 def shutdown():
@@ -222,9 +255,11 @@ def shutdown():
     save_session(conversation_history)
     topic_manager.close_session()
     delete_session_collection()
-    total_cost = (total_input_tokens * SONNET_INPUT_COST +
-                  total_output_tokens * SONNET_OUTPUT_COST)
-    print(f"[Session cost: £{total_cost:.4f} | Total tokens: {total_input_tokens + total_output_tokens}]")
+    sonnet_cost = total_input_tokens * SONNET_INPUT_COST + total_output_tokens * SONNET_OUTPUT_COST
+    haiku_cost = total_haiku_input_tokens * HAIKU_INPUT_COST + total_haiku_output_tokens * HAIKU_OUTPUT_COST
+    total_cost = sonnet_cost + haiku_cost
+    total_tokens = total_input_tokens + total_output_tokens + total_haiku_input_tokens + total_haiku_output_tokens
+    print(f"[Session cost: £{total_cost:.4f} (Sonnet £{sonnet_cost:.4f} / Haiku £{haiku_cost:.4f}) | Total tokens: {total_tokens}]")
     print("Jarvis: Shutting down, Sir.")
 
 voice_mode = False
@@ -265,16 +300,19 @@ while True:
         continue
 
     if user_input.lower() == "cost":
-        total_cost = (total_input_tokens * SONNET_INPUT_COST +
-                      total_output_tokens * SONNET_OUTPUT_COST)
+        sonnet_cost = total_input_tokens * SONNET_INPUT_COST + total_output_tokens * SONNET_OUTPUT_COST
+        haiku_cost = total_haiku_input_tokens * HAIKU_INPUT_COST + total_haiku_output_tokens * HAIKU_OUTPUT_COST
+        total_cost = sonnet_cost + haiku_cost
         budget_used = (total_cost / MONTHLY_BUDGET) * 100
-        print(f"[Session — input: {total_input_tokens} output: {total_output_tokens} total: £{total_cost:.4f} | Monthly budget: £{MONTHLY_BUDGET} used: {budget_used:.1f}%]")
+        print(f"[Session — Sonnet in: {total_input_tokens} out: {total_output_tokens} £{sonnet_cost:.4f} | Haiku in: {total_haiku_input_tokens} out: {total_haiku_output_tokens} £{haiku_cost:.4f} | Total: £{total_cost:.4f} | Budget: {budget_used:.1f}%]")
         continue
 
     if user_input.lower() == "reset":
         conversation_history.clear()
         total_input_tokens = 0
         total_output_tokens = 0
+        total_haiku_input_tokens = 0
+        total_haiku_output_tokens = 0
         print("[Session reset — memory cleared, costs zeroed]")
         continue
 
