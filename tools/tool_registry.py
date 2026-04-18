@@ -1,6 +1,7 @@
 import chromadb
 import json
 import os
+import hashlib
 
 # Separate Chroma collection for tools only
 _client = chromadb.PersistentClient(path="./chroma_db")
@@ -9,13 +10,23 @@ _tool_collection = _client.get_or_create_collection(
     metadata={"hnsw:space": "cosine"}
 )
 
+def _tools_hash(tools: list) -> str:
+    return hashlib.md5(json.dumps(tools, sort_keys=True).encode()).hexdigest()
+
 def register_tools(tools: list):
     """
     Embed all tool definitions into the tool vector DB.
-    Call once on startup. Re-registers if definitions have changed.
+    Only re-embeds if tool definitions have changed since last startup.
     """
-    # Clear and re-register to pick up any definition changes
-    existing = _tool_collection.get()
+    current_hash = _tools_hash(tools)
+
+    # Check if already embedded with same content
+    existing = _tool_collection.get(include=["metadatas"])
+    if existing["ids"] and existing["metadatas"][0].get("content_hash") == current_hash:
+        print(f"[Tool registry: up to date ({len(tools)} tools)]")
+        return
+
+    # Content changed or first run — re-embed
     if existing["ids"]:
         _tool_collection.delete(ids=existing["ids"])
 
@@ -24,13 +35,13 @@ def register_tools(tools: list):
     ids = []
 
     for tool in tools:
-        # Embed the description + name so semantic search finds the right tool
         doc = f"{tool['name']}: {tool['description']}"
         documents.append(doc)
         metadatas.append({
             "name": tool["name"],
             "schema": json.dumps(tool["input_schema"]),
-            "full_definition": json.dumps(tool)
+            "full_definition": json.dumps(tool),
+            "content_hash": current_hash
         })
         ids.append(tool["name"])
 
@@ -45,7 +56,6 @@ def register_tools(tools: list):
 def get_tools_for_message(message: str, n_results: int = 3) -> list:
     """
     Semantically retrieve the most relevant tool definitions for a message.
-    Returns a list of tool dicts ready to pass to the API.
     Returns empty list if message is unlikely to need tools.
     """
     count = _tool_collection.count()
@@ -61,13 +71,8 @@ def get_tools_for_message(message: str, n_results: int = 3) -> list:
     )
 
     tools = []
-    distances = results["distances"][0]
-    metadatas = results["metadatas"][0]
-
-    for meta, distance in zip(metadatas, distances):
-        # Cosine distance threshold — only include tools that are actually relevant
-        # Distance of 0 = identical, 1 = completely unrelated
-        # Threshold of 0.6 means "reasonably relevant"
+    for meta, distance in zip(results["metadatas"][0], results["distances"][0]):
+        print(f"[Debug — {meta['name']}: {distance:.2f}]")
         if distance < 0.6:
             tool_def = json.loads(meta["full_definition"])
             tools.append(tool_def)

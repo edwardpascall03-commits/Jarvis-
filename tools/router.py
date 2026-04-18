@@ -23,7 +23,7 @@ Category:"""
 
 # ─── Action Detection ─────────────────────────────────────────────────────────
 
-READ_KEYWORDS = ["read", "show me", "what's in", "open", "find", "search", "list", "what does", "tell me about", "look at", "check"]
+READ_KEYWORDS = ["read", "show me", "what's in", "open", "find", "search", "list", "what does", "tell me about", "look at", "check","what files", "do you have any", "is there a"]
 WRITE_KEYWORDS = ["append", "log", "save", "write", "record", "add to", "note down", "update", "put in", "store"]
 
 def detect_action(message: str) -> str:

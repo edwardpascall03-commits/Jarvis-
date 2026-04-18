@@ -12,13 +12,13 @@ from tools.retrieval import (
     store_session, retrieve_session, format_session_for_prompt,
     delete_session_collection
 )
-from tools.router import classify, haiku_chat, should_use_claude
+from tools.router import classify, haiku_chat, should_use_claude, detect_action
 from tools.executor import run_with_tools
 from tools.memory import save_session, load_last_session, get_daily_dir
 from tools.topic_manager import TopicManager
 from tools.tool_registry import register_tools, get_tools_for_message
 from tools.memory_curator import register_profile_chunks, get_relevant_chunks, format_profile_for_prompt, curate_context
-from tools.router import classify, haiku_chat, should_use_claude, detect_action
+from tools.vault_sync import sync_vault, read_note_chunked, search_file_summaries
 
 load_dotenv()
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -109,14 +109,34 @@ tools = [
             "type": "object",
             "properties": {}
         }
+    },
+    {
+        "name": "search_file_summaries",
+        "description": "Search for vault files by topic when the user asks what files exist, what documents are available, or wants to find files about a subject. Use BEFORE read_vault_file when filename is unknown.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Topic or subject to search for"}
+            },
+            "required": ["query"]
+        }
     }
-]
+] 
 
 # Register tools into Chroma vector DB after tools list is defined
 register_tools(tools)
 register_profile_chunks()
+sync_vault()
+
+# Chunked reading state
+_reading_file = None
+_reading_chunk = 0
+_pending_file = None
+
 
 def handle_tool(name, inputs):
+    global _reading_file, _reading_chunk
+
     if name == "append_to_today":
         result = append_to_today(inputs["content"])
     elif name == "read_today":
@@ -126,11 +146,22 @@ def handle_tool(name, inputs):
     elif name == "read_note":
         result = read_note(inputs["filename"])
     elif name == "read_vault_file":
-        result = read_note(inputs["filename"])
+        _reading_file = inputs["filename"]
+        _reading_chunk = 0
+        result = read_note_chunked(inputs["filename"], 0)
     elif name == "search_vault":
         result = search_vault(inputs["query"])
     elif name == "list_vault":
         result = list_vault()
+    elif name == "search_file_summaries":
+        from tools.vault_sync import search_file_summaries
+        results = search_file_summaries(inputs["query"])
+        if not results:
+            result = "No files found matching that topic."
+        else:
+            global _pending_file
+            _pending_file = results[0]["path"]
+            result = "\n".join(f"- {r['path']}: {r['summary']}" for r in results)
     else:
         result = "Unknown tool."
     return result
@@ -178,7 +209,7 @@ def chat(message):
     if action == "READ":
         # Reading never needs Sonnet — force Haiku, inject vault tools
         active_tools = [t for t in tools if t["name"] in [
-            "search_vault", "read_vault_file", "read_note", "read_today", "list_vault"
+           "search_file_summaries", "search_vault", "read_vault_file", "read_note", "read_today", "list_vault"
         ]]
         force_haiku = True
 
@@ -191,7 +222,7 @@ def chat(message):
         # Ambiguous — use Chroma semantic selection, fallback for RETRIEVAL
         active_tools = get_tools_for_message(message, n_results=3)
         if not active_tools and category == "RETRIEVAL":
-            active_tools = [t for t in tools if t["name"] in ["search_vault", "read_vault_file", "read_note"]]
+            active_tools = [t for t in tools if t["name"] in ["search_file_summaries", "search_vault", "read_vault_file", "read_note"]]
             print(f"[Tool fallback: vault tools injected for RETRIEVAL]")
         force_haiku = False
 
@@ -318,6 +349,41 @@ while True:
 
     if not user_input:
         continue
+
+    # Handle continue reading
+    if user_input.lower() in ["continue reading", "continue", "next section"]:
+        if _reading_file:
+            _reading_chunk += 1
+            content = read_note_chunked(_reading_file, _reading_chunk)
+            print(f"Jarvis: {content}\n")
+            continue
+        else:
+            print("Jarvis: No file currently being read, Sir.\n")
+            continue
+
+    # Handle conversational follow-ups for file reading
+    if user_input.lower() in ["yes", "yes please", "read it", "go ahead", "show me", "continue reading", "continue", "next section"]:
+        if user_input.lower() in ["continue reading", "continue", "next section"]:
+            if _reading_file:
+                _reading_chunk += 1
+                content = read_note_chunked(_reading_file, _reading_chunk)
+                print(f"Jarvis: {content}\n")
+                continue
+            else:
+                print("Jarvis: No file currently being read, Sir.\n")
+                continue
+        elif _pending_file:
+            _reading_file = _pending_file
+            _reading_chunk = 0
+            _pending_file = None
+            content = read_note_chunked(_reading_file, 0)
+            print(f"Jarvis: {content}\n")
+            continue
+        elif _reading_file:
+            _reading_chunk += 1
+            content = read_note_chunked(_reading_file, _reading_chunk)
+            print(f"Jarvis: {content}\n")
+            continue
 
     reply = chat(user_input)
     print(f"Jarvis: {reply}\n")

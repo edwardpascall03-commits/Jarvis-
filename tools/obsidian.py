@@ -8,7 +8,9 @@ def get_today_path():
     return os.path.join(VAULT_PATH, "daily", f"{today}.md")
 
 def read_note(filename: str) -> str:
-    """Read a note by relative path from vault root."""
+    # Add .md if extension missing
+    if not filename.endswith(".md"):
+        filename = filename + ".md"
     path = os.path.join(VAULT_PATH, filename)
     if not os.path.exists(path):
         return f"Note '{filename}' not found."
